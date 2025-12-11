@@ -13,6 +13,7 @@ set -euo pipefail
 #
 # Supported options:
 #   --env <name>           Conda/mamba environment name (default: pxdbench)
+#   --prefix <path>        Install to custom path (takes precedence over --env)
 #   --pkg_manager <tool>   conda | mamba | micromamba (default: conda)
 #   --cuda-version <ver>   CUDA version string, e.g. 12.1, 12.2, 12.4
 #                          Required. Must be >= 12.1.
@@ -20,14 +21,15 @@ set -euo pipefail
 
 # Default configuration
 env_name="pxdbench"
+env_prefix=""            # custom installation path
 pkg_manager="conda"      # conda | mamba | micromamba
 cuda_version=""          # e.g. 12.1, 12.2, 12.4
 
 # ----------------------------------------------------------
 # Parse command-line options
 # ----------------------------------------------------------
-OPTIONS=e:p:c:
-LONGOPTIONS=env:,pkg_manager:,cuda-version:
+OPTIONS=e:p:c:x:
+LONGOPTIONS=env:,pkg_manager:,cuda-version:,prefix:
 
 PARSED=$(getopt --options="${OPTIONS}" --longoptions="${LONGOPTIONS}" --name "$0" -- "$@") || {
   echo "Error: failed to parse command line options."
@@ -49,6 +51,10 @@ while true; do
       cuda_version="$2"
       shift 2
       ;;
+    -x|--prefix)
+      env_prefix="$2"
+      shift 2
+      ;;
     --)
       shift
       break
@@ -60,9 +66,58 @@ while true; do
   esac
 done
 
+# ----------------------------------------------------------
+# Validate and setup environment name/prefix
+# ----------------------------------------------------------
+
+# Determine which flag to use: -n (name) or -p (prefix)
+use_prefix=false
+env_identifier="${env_name}"  # default to name
+
+if [ -n "${env_prefix}" ]; then
+  # --prefix takes precedence over --env
+  use_prefix=true
+
+  # Handle tilde expansion
+  env_prefix="${env_prefix/#\~/$HOME}"
+
+  # Convert to absolute path if relative
+  if [[ "${env_prefix}" != /* ]]; then
+    env_prefix="$(cd "$(dirname "${env_prefix}")" 2>/dev/null && pwd)/$(basename "${env_prefix}")" || {
+      echo "Error: Cannot resolve prefix path '${env_prefix}'"
+      exit 1
+    }
+  fi
+
+  env_identifier="${env_prefix}"
+
+  # Validate parent directory exists
+  parent_dir="$(dirname "${env_prefix}")"
+  if [ ! -d "${parent_dir}" ]; then
+    echo "Error: Parent directory '${parent_dir}' does not exist."
+    echo "       Please create it first or use a valid path."
+    exit 1
+  fi
+
+  # Check if environment already exists at this path
+  if [ -d "${env_prefix}" ]; then
+    echo "Warning: Directory '${env_prefix}' already exists."
+    echo "         Environment creation may fail if it's already a conda environment."
+  fi
+
+  # Inform user if both --env and --prefix are provided
+  if [ "${env_name}" != "pxdbench" ]; then
+    echo "Info: Both --env and --prefix specified. Using --prefix (${env_prefix})"
+  fi
+fi
+
 echo "=================================================="
 echo " PXDesignBench Installation"
-echo "   Environment name : ${env_name}"
+if [ "${use_prefix}" = true ]; then
+  echo "   Environment path : ${env_identifier}"
+else
+  echo "   Environment name : ${env_identifier}"
+fi
 echo "   Package manager  : ${pkg_manager}"
 echo "   CUDA version     : ${cuda_version:-<not specified>}"
 echo "=================================================="
@@ -166,17 +221,33 @@ if [ "${env_tool}" = "micromamba" ]; then
   # Initialize micromamba shell hook for bash
   eval "$(micromamba shell hook -s bash)"
 
-  echo ">>> Creating environment '${env_name}' (Python 3.11) with micromamba"
-  micromamba create -y -n "${env_name}" python=3.11 || {
-    echo "Error: failed to create environment ${env_name} with micromamba"
-    exit 1
-  }
+  echo ">>> Creating environment (Python 3.11) with micromamba"
+  if [ "${use_prefix}" = true ]; then
+    echo "    Using custom path: ${env_identifier}"
+    micromamba create -y -p "${env_identifier}" python=3.11 || {
+      echo "Error: failed to create environment at ${env_identifier} with micromamba"
+      exit 1
+    }
+  else
+    echo "    Using name: ${env_identifier}"
+    micromamba create -y -n "${env_identifier}" python=3.11 || {
+      echo "Error: failed to create environment ${env_identifier} with micromamba"
+      exit 1
+    }
+  fi
 
-  echo ">>> Activating environment '${env_name}' (micromamba)"
-  micromamba activate "${env_name}" || {
-    echo "Error: failed to activate environment ${env_name} with micromamba"
-    exit 1
-  }
+  echo ">>> Activating environment (micromamba)"
+  if [ "${use_prefix}" = true ]; then
+    micromamba activate -p "${env_identifier}" || {
+      echo "Error: failed to activate environment at ${env_identifier} with micromamba"
+      exit 1
+    }
+  else
+    micromamba activate "${env_identifier}" || {
+      echo "Error: failed to activate environment ${env_identifier} with micromamba"
+      exit 1
+    }
+  fi
 
 else
   echo ">>> Using ${env_tool} to manage environments"
@@ -188,26 +259,38 @@ else
 
   echo "Conda base      : ${CONDA_BASE}"
 
-  echo ">>> Creating environment '${env_name}' (Python 3.11) with ${env_tool}"
-  "${env_tool}" create -y -n "${env_name}" python=3.11 || {
-    echo "Error: failed to create environment ${env_name} with ${env_tool}"
-    exit 1
-  }
+  echo ">>> Creating environment (Python 3.11) with ${env_tool}"
+  if [ "${use_prefix}" = true ]; then
+    echo "    Using custom path: ${env_identifier}"
+    "${env_tool}" create -y -p "${env_identifier}" python=3.11 || {
+      echo "Error: failed to create environment at ${env_identifier} with ${env_tool}"
+      exit 1
+    }
+  else
+    echo "    Using name: ${env_identifier}"
+    "${env_tool}" create -y -n "${env_identifier}" python=3.11 || {
+      echo "Error: failed to create environment ${env_identifier} with ${env_tool}"
+      exit 1
+    }
+  fi
 
-  echo ">>> Activating environment '${env_name}' (${env_tool})"
+  echo ">>> Activating environment (${env_tool})"
   # shellcheck disable=SC1090
-  source "${CONDA_BASE}/bin/activate" "${env_name}" || {
-    echo "Error: failed to activate environment ${env_name}"
+  source "${CONDA_BASE}/bin/activate" "${env_identifier}" || {
+    echo "Error: failed to activate environment ${env_identifier}"
     exit 1
   }
 
-  if [ "${CONDA_DEFAULT_ENV:-}" != "${env_name}" ]; then
-    echo "Error: expected environment '${env_name}' to be active, but got '${CONDA_DEFAULT_ENV:-}'."
-    exit 1
+  if [ "${use_prefix}" = false ]; then
+    # Only check CONDA_DEFAULT_ENV for name-based environments
+    if [ "${CONDA_DEFAULT_ENV:-}" != "${env_identifier}" ]; then
+      echo "Error: expected environment '${env_identifier}' to be active, but got '${CONDA_DEFAULT_ENV:-}'."
+      exit 1
+    fi
   fi
 fi
 
-echo "Environment '${env_name}' successfully activated."
+echo "Environment successfully activated."
 
 ############################################################
 # Python package installation
@@ -323,15 +406,23 @@ fi
 t=${SECONDS}
 echo "=================================================="
 echo " PXDesignBench environment setup done!"
-echo "   Environment name : ${env_name}"
+if [ "${use_prefix}" = true ]; then
+  echo "   Environment path : ${env_identifier}"
+else
+  echo "   Environment name : ${env_identifier}"
+fi
 echo "   Package manager  : ${pkg_manager}"
 echo "   CUDA version     : ${cuda_version} (torch tag: ${torch_tag})"
 echo
 echo " Activate with:"
 if [ "${env_tool}" = "micromamba" ]; then
-  echo "   micromamba activate ${env_name}"
+  if [ "${use_prefix}" = true ]; then
+    echo "   micromamba activate -p ${env_identifier}"
+  else
+    echo "   micromamba activate ${env_identifier}"
+  fi
 else
-  echo "   conda activate ${env_name}"
+  echo "   conda activate ${env_identifier}"
 fi
 echo
 echo " Installation time: $((t / 3600))h $(((t / 60) % 60))m $((t % 60))s"
