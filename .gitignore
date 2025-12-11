@@ -87,6 +87,7 @@ ipython_config.py
 # data cache and checkpoints
 data_cache/
 checkpoints/
+tool_weights/
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is

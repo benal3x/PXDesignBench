@@ -9,4 +9,5 @@ setup(
     url="https://github.com/bytedance/PXDesignBench",
     license="Apache-2.0",
     python_requires=">=3.10",
+    packages=find_packages(include=['pxdbench', 'pxdbench.*']),
 )
