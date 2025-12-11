@@ -152,8 +152,8 @@ class ProtenixFilter(ProtenixAPI):
                 input_dicts, orig_seqs, trim=True, use_template=use_template
             )
 
-        # precompute MSA if necessary
-        input_dicts = populate_msa_with_cache(input_dicts)
+        # MSA disabled - skip precomputation
+        # input_dicts = populate_msa_with_cache(input_dicts)
 
         os.makedirs(dump_dir, exist_ok=True)
         json_path = os.path.join(dump_dir, "protenix_inputs.json")

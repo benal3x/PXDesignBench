@@ -64,8 +64,8 @@ eval_configs = {
                 "N_step": 2,
                 "step_scale_eta": 1.0,
                 "gamma0": 0,
-                "use_template": False,
-                "use_msa": True,
+                "use_template": True,
+                "use_msa": False,
             },
             "ptx": {
                 "model_name": "protenix_base_default_v0.5.0",
@@ -77,8 +77,8 @@ eval_configs = {
                 "N_step": 2,
                 "step_scale_eta": 1.0,
                 "gamma0": 0,
-                "use_template": False,
-                "use_msa": True,
+                "use_template": True,
+                "use_msa": False,
             },
         },
         "filters": {
