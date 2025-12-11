@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 class ProtenixFilter(ProtenixAPI):
     def __init__(self, cfg, device="cuda:0"):
         self.cfg = cfg
-        self.model_name = cfg.model_name
+        self.model_name = cfg["model_name"]
         self.ptx_cfg = get_configs(self.model_name)
         self.ptx_cfg.model_name = self.model_name
         self.ptx_cfg.use_deepspeed_evo_attention = self.cfg.get(
@@ -56,9 +56,9 @@ class ProtenixFilter(ProtenixAPI):
         self.ptx_cfg.data.msa.min_size.test = 2000
         self.ptx_cfg.data.msa.sample_cutoff.test = 2000
         if self.cfg.get("load_checkpoint_dir", ""):
-            self.ptx_cfg.load_checkpoint_dir = self.cfg.load_checkpoint_dir
+            self.ptx_cfg.load_checkpoint_dir = self.cfg["load_checkpoint_dir"]
         self.ptx_ckpt_path = f"{self.ptx_cfg.load_checkpoint_dir}/{self.model_name}.pt"
-        self.dtype = cfg.dtype
+        self.dtype = cfg["dtype"]
         self.device = device
         self.init_model()
 
