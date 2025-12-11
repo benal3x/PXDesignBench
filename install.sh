@@ -237,6 +237,9 @@ if [ "${env_tool}" = "micromamba" ]; then
   fi
 
   echo ">>> Activating environment (micromamba)"
+  # Temporarily disable 'unbound variable' check for micromamba activation
+  # (activation scripts may reference unset variables)
+  set +u
   if [ "${use_prefix}" = true ]; then
     micromamba activate -p "${env_identifier}" || {
       echo "Error: failed to activate environment at ${env_identifier} with micromamba"
@@ -248,6 +251,7 @@ if [ "${env_tool}" = "micromamba" ]; then
       exit 1
     }
   fi
+  set -u
 
 else
   echo ">>> Using ${env_tool} to manage environments"
@@ -275,11 +279,15 @@ else
   fi
 
   echo ">>> Activating environment (${env_tool})"
+  # Temporarily disable 'unbound variable' check for conda activation
+  # (conda's activate scripts may reference unset variables)
+  set +u
   # shellcheck disable=SC1090
   source "${CONDA_BASE}/bin/activate" "${env_identifier}" || {
     echo "Error: failed to activate environment ${env_identifier}"
     exit 1
   }
+  set -u
 
   if [ "${use_prefix}" = false ]; then
     # Only check CONDA_DEFAULT_ENV for name-based environments
